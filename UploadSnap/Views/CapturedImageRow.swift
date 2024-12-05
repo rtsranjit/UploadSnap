@@ -67,7 +67,7 @@ struct CapturedImageRow: View {
                         }
                         .onTapGesture {
                             if let uIImage = FileManagerHelper.loadImage(from: image.url) {
-                                capturedImagesVM.uploadImage(uiImage: uIImage, imageName: image.name)
+                                capturedImagesVM.uploadImage(image: uIImage, imageName: image.name)
                             }
                         }
                         .padding(.leading, 8)

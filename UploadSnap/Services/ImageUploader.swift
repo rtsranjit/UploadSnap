@@ -6,74 +6,79 @@
 //
 
 import Foundation
-import RealmSwift
 import UIKit
 
-class ImageUploader: NSObject {
-    
-    private var uploadTask: URLSessionUploadTask?
-    private var session: URLSession?
-    private var capturedImagesVM: CapturedImagesViewModel
+class ImageUploader: NSObject, URLSessionDelegate {
+    private var session: URLSession
+    private var progressObserver: NSKeyValueObservation?
 
-    init(viewModel: CapturedImagesViewModel) {
-        self.capturedImagesVM = viewModel
-        self.session = URLSession(configuration: URLSessionConfiguration.default, delegate: nil, delegateQueue: nil)
+    // MARK: - Initialization
+
+    override init() {
+        self.session = URLSession(configuration: .default, delegate: nil, delegateQueue: nil)
         super.init()
     }
 
-    var progressObserver: NSKeyValueObservation?
+    // MARK: - Upload Functionality
 
-    func uploadImage(image: UIImage, imageName: String) {
-        
-        self.session = URLSession(configuration: URLSessionConfiguration.default, delegate: nil, delegateQueue: nil)
-        
-        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
-            print("Error: Unable to convert image to data.")
-            return
-        }
-
-        let url = URL(string: "https://www.clippr.ai/api/upload")!
-
+    /// Uploads a file to the server using a multipart request.
+    /// - Parameters:
+    ///   - url: Server endpoint URL.
+    ///   - fileData: File data to be uploaded.
+    ///   - fileName: Name of the file.
+    ///   - fileType: MIME type of the file.
+    ///   - fieldName: Field name in the multipart request (default: "image").
+    ///   - onProgress: Callback for upload progress.
+    ///   - onComplete: Callback for completion with success or failure.
+    func uploadFile(
+        with url: URL,
+        fileData: Data,
+        fileName: String,
+        fileType: String,
+        fieldName: String = "image",
+        onProgress: @escaping (Double) -> Void,
+        onComplete: @escaping (Result<Data, Error>) -> Void
+    ) {
+        let boundary = "Boundary-\(UUID().uuidString)"
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-
-        let boundary = "Boundary-\(UUID().uuidString)"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
+        // Create multipart form body
         var body = Data()
         body.append("--\(boundary)\r\n")
-        body.append("Content-Disposition: form-data; name=\"image\"; filename=\"\(imageName)\"\r\n")
-        body.append("Content-Type: image/jpeg\r\n\r\n")
-        body.append(imageData)
+        body.append("Content-Disposition: form-data; name=\"\(fieldName)\"; filename=\"\(fileName)\"\r\n")
+        body.append("Content-Type: \(fileType)\r\n\r\n")
+        body.append(fileData)
         body.append("\r\n--\(boundary)--\r\n")
 
-        uploadTask = session?.uploadTask(with: request, from: body) { data, response, error in
+        // Setup upload task
+        let uploadTask = session.uploadTask(with: request, from: body) { data, response, error in
             if let error = error {
-                print("Upload failed: \(error.localizedDescription)")
+                onComplete(.failure(error))
                 return
             }
 
-            // Check response status
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                print("Upload failed with response: \(String(describing: response))")
+                let statusCodeError = NSError(
+                    domain: "UploadError",
+                    code: (response as? HTTPURLResponse)?.statusCode ?? 0,
+                    userInfo: nil
+                )
+                onComplete(.failure(statusCodeError))
                 return
             }
-            
-            print("Upload successful!")
+
+            onComplete(.success(data ?? Data()))
         }
-        
-        if let task = uploadTask {
-            progressObserver = task.progress.observe(\.fractionCompleted) { progress, _ in
-                DispatchQueue.main.async { [self] in
-                    
-                    capturedImagesVM.associateTask(task, withImageNamed: imageName, progress: progress.fractionCompleted)
-                    
-                    print("Upload Progress: \(progress.fractionCompleted * 100)%")
-                }
+
+        // Observe progress updates
+        progressObserver = uploadTask.progress.observe(\.fractionCompleted) { progress, _ in
+            DispatchQueue.main.async {
+                onProgress(progress.fractionCompleted)
             }
         }
 
-        uploadTask?.resume()
+        uploadTask.resume()
     }
-
 }
