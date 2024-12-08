@@ -32,8 +32,33 @@ class CapturedImagesViewModel: ObservableObject {
     func fetchCapturedImages() {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
-            let images = self.realm.objects(CapturedImage.self)
-            self.capturedImages = Array(images)
+            
+            self.updateFailedImagesStatus()
+            
+            let savedImages = self.realm.objects(CapturedImage.self)
+            self.capturedImages = Array(savedImages)
+        }
+    }
+    
+    // MARK: - Handle Upload Failed Images
+    
+    /// Updating the uploadStatus and uploadfailed values
+    func updateFailedImagesStatus() {
+        let images = self.realm.objects(CapturedImage.self)
+        let array = Array(images)
+        if array.contains(where: { $0.uploadStatus == UploadStatus.uploading.rawValue }) {
+            do {
+                try realm.write {
+                    array.forEach { object in
+                        if object.uploadStatus == UploadStatus.uploading.rawValue {
+                            object.uploadStatus = UploadStatus.failed.rawValue
+                            object.uploadProgress = 0.0
+                        }
+                    }
+                }
+            } catch {
+                print("Error: \(error.localizedDescription)")
+            }
         }
     }
 
