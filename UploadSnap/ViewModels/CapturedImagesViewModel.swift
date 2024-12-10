@@ -33,8 +33,6 @@ class CapturedImagesViewModel: ObservableObject {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             
-            self.updateFailedImagesStatus()
-            
             let savedImages = self.realm.objects(CapturedImage.self)
             self.capturedImages = Array(savedImages)
         }
