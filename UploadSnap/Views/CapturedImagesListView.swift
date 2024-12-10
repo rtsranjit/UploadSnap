@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct CapturedImagesListView: View {
-    @ObservedObject var capturedImagesVM = CapturedImagesViewModel()
+    @EnvironmentObject var capturedImagesVM: CapturedImagesViewModel
     @State private var showImagePicker = false
     @State private var imageSource: UIImagePickerController.SourceType = .camera
     @State private var showActionSheet = false
